@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistem Presensi SMP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f3f4f6;
+        color: #1f2937;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+      .card {
+        background-color: white;
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+      }
+      .sidebar {
+        background-color: #1f2937;
+        color: white;
+        border-radius: 1rem;
+        padding: 1rem;
+      }
+      .sidebar a {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        transition: background-color 0.2s;
+      }
+      .sidebar a:hover,
+      .sidebar a.active {
+        background-color: #374151;
+      }
+      .content-section {
+        display: none;
+      }
+      .content-section.active {
+        display: block;
+      }
+      .btn-primary {
+        background-color: #3b82f6;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        font-weight: 600;
+        transition: background-color 0.2s;
+      }
+      .btn-primary:hover {
+        background-color: #2563eb;
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.4);
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background-color: #fff;
+        padding: 2rem;
+        border-radius: 1rem;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        width: 90%;
+        max-width: 500px;
+        position: relative;
+      }
+      .close-btn {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.5rem;
+        font-weight: bold;
+        cursor: pointer;
+        color: #6b7280;
+      }
+      .table-auto {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table-auto th,
+      .table-auto td {
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+      }
+      .table-auto th {
+        font-weight: 600;
+        color: #6b7280;
+        background-color: #f9fafb;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <!-- Login Modal (Aktif saat halaman dimuat) -->
+    <div id="loginModal" class="modal" style="display: flex">
+      <div class="modal-content text-center">
+        <h2 class="text-2xl font-bold mb-6">Login Sistem Presensi</h2>
+        <div class="mb-4">
+          <input
+            type="text"
+            id="username"
+            placeholder="Nama Pengguna"
+            class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div class="mb-6">
+          <input
+            type="password"
+            id="password"
+            placeholder="Kata Sandi"
+            class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <select
+          id="userRole"
+          class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="admin">Admin</option>
+          <option value="guru">Guru</option>
+          <option value="siswa">Siswa</option>
+        </select>
+        <button onclick="handleLogin()" class="btn-primary w-full">
+          Login
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Container (Hidden until login) -->
+    <div id="mainDashboard" class="container hidden">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <!-- Sidebar -->
+        <aside class="col-span-1 sidebar p-4">
+          <div class="flex items-center justify-between mb-8">
+            <h1 class="text-xl font-bold">Menu</h1>
+            <button
+              onclick="logout()"
+              class="text-white text-sm opacity-75 hover:opacity-100"
+            >
+              Keluar
+            </button>
+          </div>
+          <nav id="sidebarNav" class="flex flex-col gap-2">
+            <!-- Nav links will be dynamically added here -->
+          </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="col-span-1 md:col-span-3 card min-h-[80vh]">
+          <!-- Header with title and user info -->
+          <header class="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 id="pageTitle" class="text-3xl font-bold"></h2>
+            <div class="text-right">
+              <p class="text-sm text-gray-500">Selamat datang,</p>
+              <p id="userName" class="font-semibold"></p>
+            </div>
+          </header>
+
+          <!-- Content Sections (Siswa, Guru, Admin) -->
+
+          <!-- Siswa Dashboard -->
+          <div
+            id="siswaDashboard"
+            class="content-section card flex flex-col items-center justify-center p-8"
+          >
+            <h3 class="text-2xl font-semibold mb-6">Presensi Siswa</h3>
+            <div
+              id="webcamContainer"
+              class="w-full max-w-md h-auto mb-6 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center"
+            >
+              <video
+                id="webcamVideo"
+                class="w-full h-full object-cover"
+                autoplay
+                playsinline
+              ></video>
+              <canvas id="canvas" class="hidden"></canvas>
+            </div>
+            <button
+              id="absenButton"
+              onclick="startFaceRecognition()"
+              class="btn-primary w-full max-w-md mb-4"
+            >
+              Mulai Presensi
+            </button>
+            <p id="statusMessage" class="text-sm text-gray-600">
+              Status: Menunggu presensi...
+            </p>
+          </div>
+
+          <!-- Siswa Lihat Kehadiran -->
+          <div id="siswaKehadiran" class="content-section">
+            <h3 class="text-2xl font-semibold mb-6">Status Kehadiran Saya</h3>
+            <div id="myPresenceTable" class="overflow-x-auto">
+              <table class="table-auto">
+                <thead>
+                  <tr>
+                    <th>Tanggal</th>
+                    <th>Mata Pelajaran</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Example data -->
+                  <tr>
+                    <td>17/08/2025</td>
+                    <td>Matematika</td>
+                    <td>Hadir</td>
+                  </tr>
+                  <tr>
+                    <td>16/08/2025</td>
+                    <td>IPA</td>
+                    <td>Sakit</td>
+                  </tr>
+                  <tr>
+                    <td>15/08/2025</td>
+                    <td>Bahasa Indonesia</td>
+                    <td>Izin</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Guru Dashboard -->
+          <div id="guruDashboard" class="content-section">
+            <h3 class="text-2xl font-semibold mb-6">Kehadiran Hari Ini</h3>
+            <div class="mb-4">
+              <label
+                for="classSelect"
+                class="block text-gray-700 font-medium mb-1"
+                >Pilih Kelas:</label
+              >
+              <select
+                id="classSelect"
+                class="p-2 border border-gray-300 rounded-lg"
+              >
+                <option value="7A">Kelas 7A</option>
+                <option value="7B">Kelas 7B</option>
+                <option value="8A">Kelas 8A</option>
+              </select>
+            </div>
+            <div id="presenceList" class="overflow-x-auto mb-6">
+              <table class="table-auto">
+                <thead>
+                  <tr>
+                    <th>Nama Siswa</th>
+                    <th>Waktu Presensi</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Example data -->
+                  <tr>
+                    <td>Andi Pratama</td>
+                    <td>07:30</td>
+                    <td>Hadir</td>
+                    <td>-</td>
+                  </tr>
+                  <tr>
+                    <td>Budi Santoso</td>
+                    <td>-</td>
+                    <td>
+                      <span class="text-red-500 font-semibold">Alpha</span>
+                    </td>
+                    <td>
+                      <button
+                        onclick="openKeteranganModal('Budi Santoso')"
+                        class="text-blue-500 hover:underline"
+                      >
+                        Beri Keterangan
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Citra Dewi</td>
+                    <td>07:32</td>
+                    <td>Hadir</td>
+                    <td>-</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <button class="btn-primary">Unduh Laporan Hari Ini</button>
+          </div>
+
+          <!-- Guru Keterangan Modal -->
+          <div id="keteranganModal" class="modal">
+            <div class="modal-content">
+              <span class="close-btn" onclick="closeKeteranganModal()"
+                >&times;</span
+              >
+              <h2 class="text-2xl font-bold mb-4">Berikan Keterangan</h2>
+              <p class="mb-2">Siswa: <span id="siswaName"></span></p>
+              <div class="mb-4">
+                <label
+                  for="statusKehadiran"
+                  class="block text-gray-700 font-medium mb-1"
+                  >Status:</label
+                >
+                <select
+                  id="statusKehadiran"
+                  class="w-full p-2 border rounded-lg"
+                >
+                  <option value="izin">Izin</option>
+                  <option value="sakit">Sakit</option>
+                </select>
+              </div>
+              <div class="mb-4">
+                <label
+                  for="catatanKeterangan"
+                  class="block text-gray-700 font-medium mb-1"
+                  >Catatan:</label
+                >
+                <textarea
+                  id="catatanKeterangan"
+                  rows="3"
+                  class="w-full p-2 border rounded-lg"
+                  placeholder="Masukkan catatan..."
+                ></textarea>
+              </div>
+              <button onclick="submitKeterangan()" class="btn-primary w-full">
+                Simpan
+              </button>
+            </div>
+          </div>
+
+          <!-- Admin Dashboard -->
+          <div id="adminDashboard" class="content-section">
+            <h3 class="text-2xl font-semibold mb-6">Dasbor Admin</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <!-- Card for Siswa -->
+              <div class="card p-6">
+                <h4 class="text-xl font-semibold mb-2">Kelola Data Siswa</h4>
+                <p class="text-sm text-gray-600 mb-4">
+                  Tambahkan, edit, atau hapus data siswa.
+                </p>
+                <button onclick="showAdminSection('siswa')" class="btn-primary">
+                  Kelola
+                </button>
+              </div>
+              <!-- Card for Guru -->
+              <div class="card p-6">
+                <h4 class="text-xl font-semibold mb-2">Kelola Data Guru</h4>
+                <p class="text-sm text-gray-600 mb-4">
+                  Tambahkan, edit, atau hapus data guru.
+                </p>
+                <button onclick="showAdminSection('guru')" class="btn-primary">
+                  Kelola
+                </button>
+              </div>
+              <!-- Card for Kelas & Jadwal -->
+              <div class="card p-6">
+                <h4 class="text-xl font-semibold mb-2">
+                  Kelola Kelas & Jadwal
+                </h4>
+                <p class="text-sm text-gray-600 mb-4">
+                  Atur kelas dan mata pelajaran.
+                </p>
+                <button onclick="showAdminSection('kelas')" class="btn-primary">
+                  Kelola
+                </button>
+              </div>
+            </div>
+
+            <h4 class="text-xl font-semibold my-6">Laporan & Rekap</h4>
+            <button
+              onclick="showAdminSection('laporan')"
+              class="btn-primary w-full"
+            >
+              Generate Laporan Kehadiran
+            </button>
+          </div>
+
+          <!-- Admin Kelola Siswa -->
+          <div id="adminSiswa" class="content-section">
+            <h3 class="text-2xl font-semibold mb-6">Kelola Data Siswa</h3>
+            <button class="btn-primary mb-4">Tambah Siswa Baru</button>
+            <div class="overflow-x-auto">
+              <table class="table-auto">
+                <thead>
+                  <tr>
+                    <th>NIS</th>
+                    <th>Nama</th>
+                    <th>Kelas</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Example data -->
+                  <tr>
+                    <td>12345</td>
+                    <td>Andi Pratama</td>
+                    <td>7A</td>
+                    <td>
+                      <button class="text-blue-500 hover:underline">
+                        Edit
+                      </button>
+                      |
+                      <button class="text-red-500 hover:underline">
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>12346</td>
+                    <td>Citra Dewi</td>
+                    <td>7A</td>
+                    <td>
+                      <button class="text-blue-500 hover:underline">
+                        Edit
+                      </button>
+                      |
+                      <button class="text-red-500 hover:underline">
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Admin Kelola Guru -->
+          <div id="adminGuru" class="content-section">
+            <h3 class="text-2xl font-semibold mb-6">Kelola Data Guru</h3>
+            <button class="btn-primary mb-4">Tambah Guru Baru</button>
+            <div class="overflow-x-auto">
+              <table class="table-auto">
+                <thead>
+                  <tr>
+                    <th>NIP</th>
+                    <th>Nama</th>
+                    <th>Mata Pelajaran</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Example data -->
+                  <tr>
+                    <td>98765</td>
+                    <td>Bambang Sutrisno</td>
+                    <td>Matematika</td>
+                    <td>
+                      <button class="text-blue-500 hover:underline">
+                        Edit
+                      </button>
+                      |
+                      <button class="text-red-500 hover:underline">
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Admin Kelola Kelas -->
+          <div id="adminKelas" class="content-section">
+            <h3 class="text-2xl font-semibold mb-6">Kelola Kelas & Jadwal</h3>
+            <button class="btn-primary mb-4">Tambah Kelas Baru</button>
+            <div class="overflow-x-auto">
+              <table class="table-auto">
+                <thead>
+                  <tr>
+                    <th>Nama Kelas</th>
+                    <th>Wali Kelas</th>
+                    <th>Jumlah Siswa</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Example data -->
+                  <tr>
+                    <td>7A</td>
+                    <td>Bu Ningsih</td>
+                    <td>30</td>
+                    <td>
+                      <button class="text-blue-500 hover:underline">
+                        Lihat Detail
+                      </button>
+                      |
+                      <button class="text-red-500 hover:underline">
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Admin Laporan -->
+          <div id="adminLaporan" class="content-section">
+            <h3 class="text-2xl font-semibold mb-6">
+              Generate Laporan Kehadiran
+            </h3>
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+              <div class="flex-1">
+                <label
+                  for="reportType"
+                  class="block text-gray-700 font-medium mb-1"
+                  >Jenis Laporan:</label
+                >
+                <select id="reportType" class="w-full p-2 border rounded-lg">
+                  <option>Harian</option>
+                  <option>Bulanan</option>
+                  <option>Tahunan</option>
+                </select>
+              </div>
+              <div class="flex-1">
+                <label
+                  for="reportClass"
+                  class="block text-gray-700 font-medium mb-1"
+                  >Pilih Kelas:</label
+                >
+                <select id="reportClass" class="w-full p-2 border rounded-lg">
+                  <option>Semua Kelas</option>
+                  <option>Kelas 7A</option>
+                  <option>Kelas 7B</option>
+                </select>
+              </div>
+              <div class="flex-1">
+                <label
+                  for="reportMonth"
+                  class="block text-gray-700 font-medium mb-1"
+                  >Bulan/Tahun:</label
+                >
+                <input
+                  type="month"
+                  id="reportMonth"
+                  class="w-full p-2 border rounded-lg"
+                />
+              </div>
+            </div>
+            <button onclick="generateReport()" class="btn-primary w-full">
+              Generate & Unduh Laporan
+            </button>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script>
+      // Global variables for user state
+      let currentUser = { name: "", role: "" };
+      let currentSection = "";
+
+      // Function to handle login
+      function handleLogin() {
+        const username = document.getElementById("username").value;
+        const role = document.getElementById("userRole").value;
+        if (!username) {
+          alert("Silakan masukkan nama pengguna.");
+          return;
+        }
+
+        currentUser = { name: username, role: role };
+        document.getElementById("loginModal").style.display = "none";
+        document.getElementById("mainDashboard").classList.remove("hidden");
+
+        document.getElementById("userName").innerText = currentUser.name;
+        setupDashboard(currentUser.role);
+      }
+
+      // Function to setup dashboard based on role
+      function setupDashboard(role) {
+        const sidebarNav = document.getElementById("sidebarNav");
+        sidebarNav.innerHTML = "";
+
+        if (role === "admin") {
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link active" data-target="adminDashboard">Dasbor</a>';
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link" data-target="adminSiswa">Kelola Siswa</a>';
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link" data-target="adminGuru">Kelola Guru</a>';
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link" data-target="adminKelas">Kelola Kelas</a>';
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link" data-target="adminLaporan">Laporan</a>';
+          showSection("adminDashboard");
+        } else if (role === "guru") {
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link active" data-target="guruDashboard">Kehadiran Hari Ini</a>';
+          showSection("guruDashboard");
+        } else if (role === "siswa") {
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link active" data-target="siswaDashboard">Presensi</a>';
+          sidebarNav.innerHTML +=
+            '<a href="#" class="nav-link" data-target="siswaKehadiran">Status Kehadiran</a>';
+          showSection("siswaDashboard");
+        }
+
+        const navLinks = document.querySelectorAll(".nav-link");
+        navLinks.forEach((link) => {
+          link.addEventListener("click", (e) => {
+            e.preventDefault();
+            navLinks.forEach((l) => l.classList.remove("active"));
+            link.classList.add("active");
+            showSection(link.dataset.target);
+          });
+        });
+      }
+
+      // Function to show a specific section
+      function showSection(sectionId) {
+        const sections = document.querySelectorAll(".content-section");
+        sections.forEach((sec) => sec.classList.remove("active"));
+        document.getElementById(sectionId).classList.add("active");
+        currentSection = sectionId;
+
+        let titleMap = {
+          adminDashboard: "Dasbor Admin",
+          adminSiswa: "Kelola Data Siswa",
+          adminGuru: "Kelola Data Guru",
+          adminKelas: "Kelola Kelas & Jadwal",
+          adminLaporan: "Laporan",
+          guruDashboard: "Dasbor Guru",
+          siswaDashboard: "Presensi Siswa",
+          siswaKehadiran: "Status Kehadiran",
+        };
+        document.getElementById("pageTitle").innerText =
+          titleMap[sectionId] || "Dasbor";
+      }
+
+      // Function to simulate face recognition
+      function startFaceRecognition() {
+        const video = document.getElementById("webcamVideo");
+        const statusMessage = document.getElementById("statusMessage");
+        const absenButton = document.getElementById("absenButton");
+
+        absenButton.innerText = "Memproses...";
+        absenButton.disabled = true;
+        statusMessage.innerText = "Status: Kamera aktif, memindai wajah...";
+
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then((stream) => {
+            video.srcObject = stream;
+            video.onloadedmetadata = () => {
+              video.play();
+              setTimeout(() => {
+                // Simulating YOLO detection
+                statusMessage.innerText =
+                  "Status: Wajah terdeteksi! Mengirim data...";
+
+                setTimeout(() => {
+                  // Simulating database record
+                  statusMessage.innerText =
+                    "Status: Presensi berhasil! Waktu: " +
+                    new Date().toLocaleTimeString();
+                  absenButton.innerText = "Presensi Berhasil!";
+                  stream.getTracks().forEach((track) => track.stop()); // Stop the video stream
+                }, 2000);
+              }, 3000);
+            };
+          })
+          .catch((err) => {
+            console.error("Error accessing webcam: ", err);
+            statusMessage.innerText =
+              "Status: Gagal mengakses kamera. Mohon izinkan akses.";
+            absenButton.innerText = "Mulai Presensi";
+            absenButton.disabled = false;
+          });
+      }
+
+      // Functions for Guru's Keterangan Modal
+      function openKeteranganModal(siswaName) {
+        document.getElementById("keteranganModal").style.display = "flex";
+        document.getElementById("siswaName").innerText = siswaName;
+      }
+
+      function closeKeteranganModal() {
+        document.getElementById("keteranganModal").style.display = "none";
+      }
+
+      function submitKeterangan() {
+        // Logic to submit keterangan
+        closeKeteranganModal();
+        alert("Keterangan berhasil disimpan!");
+      }
+
+      // Functions for Admin sections
+      function showAdminSection(section) {
+        showSection(
+          `admin${section.charAt(0).toUpperCase() + section.slice(1)}`
+        );
+      }
+
+      function generateReport() {
+        alert("Laporan sedang dibuat dan akan segera diunduh.");
+      }
+
+      function logout() {
+        document.getElementById("mainDashboard").classList.add("hidden");
+        document.getElementById("loginModal").style.display = "flex";
+        currentUser = { name: "", role: "" };
+      }
+    </script>
+  </body>
+</html>
