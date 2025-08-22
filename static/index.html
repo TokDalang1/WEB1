@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Presensi SMP (YOLO Stub)</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 0; background: #f7f7fb; }
+    header { background: #1f4b8f; color: white; padding: 16px 24px; }
+    main { padding: 24px; max-width: 980px; margin: 0 auto; }
+    .card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 5px 20px rgba(0,0,0,.06); margin-bottom: 16px; }
+    input, select, button { padding: 10px 12px; border-radius: 8px; border: 1px solid #ccd; }
+    button { background: #1f4b8f; color: white; border: none; cursor: pointer; }
+    button.secondary { background: #6b7280; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .hidden { display: none; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+    th { background: #f0f4ff; }
+    .status { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+    .status.present { background: #e6fffa; color: #0b7f6a; }
+    .status.sick { background: #fff7ed; color: #b45309; }
+    .status.excused { background: #eef2ff; color: #3730a3; }
+    .status.absent { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <header>
+    <h2>Presensi SMP - YOLO Face Recognition (Stub)</h2>
+  </header>
+  <main>
+    <div id="login-card" class="card">
+      <h3>Login</h3>
+      <div class="row">
+        <input id="username" placeholder="Username" />
+        <input id="password" type="password" placeholder="Password" />
+        <button id="loginBtn">Login</button>
+      </div>
+      <p>Default admin: <code>admin / admin123</code></p>
+    </div>
+
+    <div id="me-card" class="card hidden">
+      <div class="row" style="align-items:center; justify-content:space-between">
+        <div>
+          <strong>Logged in as:</strong>
+          <span id="meName"></span> (<span id="meRole"></span>)
+        </div>
+        <button class="secondary" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <div id="student-card" class="card hidden">
+      <h3>Presensi Siswa</h3>
+      <video id="video" width="480" height="360" autoplay playsinline style="border-radius:8px; background:#000"></video>
+      <div class="row" style="margin-top:8px">
+        <button id="startCam">Aktifkan Kamera</button>
+        <button id="checkIn" class="secondary">Check-in</button>
+      </div>
+      <h4>Riwayat Presensi</h4>
+      <table>
+        <thead>
+          <tr><th>Tanggal</th><th>Status</th><th>Catatan</th></tr>
+        </thead>
+        <tbody id="myAttendance"></tbody>
+      </table>
+    </div>
+
+    <div id="teacher-card" class="card hidden">
+      <h3>Monitoring Kehadiran Hari Ini</h3>
+      <div class="row"><input type="date" id="dayPick" /><button id="refreshDay">Muat</button></div>
+      <table>
+        <thead>
+          <tr><th>ID</th><th>Student ID</th><th>Tanggal</th><th>Status</th><th>Ubah</th></tr>
+        </thead>
+        <tbody id="dayAttendance"></tbody>
+      </table>
+    </div>
+
+    <div id="admin-card" class="card hidden">
+      <h3>Admin - Kelola Data</h3>
+      <div class="row">
+        <input id="className" placeholder="Nama Kelas" />
+        <button id="addClass">Tambah Kelas</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="stuCode" placeholder="NIS" />
+        <input id="stuName" placeholder="Nama Siswa" />
+        <input id="stuUsername" placeholder="Username" />
+        <input id="stuPassword" placeholder="Password" />
+        <input id="stuClassId" placeholder="Class ID (opsional)" />
+        <button id="addStudent">Tambah Siswa</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="tchCode" placeholder="Kode Guru" />
+        <input id="tchName" placeholder="Nama Guru" />
+        <input id="tchUsername" placeholder="Username" />
+        <input id="tchPassword" placeholder="Password" />
+        <button id="addTeacher">Tambah Guru</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="loadClasses">Lihat Kelas</button>
+        <button id="loadStudents">Lihat Siswa</button>
+        <button id="loadTeachers">Lihat Guru</button>
+      </div>
+      <pre id="adminList" style="white-space:pre-wrap; background:#f9fafb; padding:12px; border-radius:8px"></pre>
+    </div>
+  </main>
+
+  <canvas id="canvas" width="480" height="360" class="hidden"></canvas>
+  <script>
+    const apiBase = '';
+    let token = null;
+    let me = null;
+
+    function show(el, flag) { el.classList[flag ? 'remove' : 'add']('hidden'); }
+    function badge(status) { return `<span class="status ${status}">${status}</span>`; }
+
+    async function request(path, opts={}) {
+      const headers = opts.headers || {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (opts.body && !(opts.body instanceof FormData)) headers['Content-Type'] = 'application/json';
+      const res = await fetch(apiBase + path, { ...opts, headers });
+      if (!res.ok) throw new Error(await res.text());
+      const ct = res.headers.get('content-type') || '';
+      return ct.includes('application/json') ? res.json() : res.text();
+    }
+
+    async function login() {
+      const u = document.getElementById('username').value;
+      const p = document.getElementById('password').value;
+      const form = new URLSearchParams();
+      form.append('username', u); form.append('password', p);
+      const res = await fetch('/auth/login', { method: 'POST', body: form });
+      if (!res.ok) { alert('Login gagal'); return; }
+      const data = await res.json();
+      token = data.access_token;
+      await loadMe();
+    }
+
+    async function loadMe() {
+      me = await request('/auth/me');
+      document.getElementById('meName').textContent = me.full_name;
+      document.getElementById('meRole').textContent = me.role;
+      show(document.getElementById('login-card'), false);
+      show(document.getElementById('me-card'), true);
+      show(document.getElementById('student-card'), me.role === 'student');
+      show(document.getElementById('teacher-card'), me.role === 'teacher' || me.role === 'admin');
+      show(document.getElementById('admin-card'), me.role === 'admin');
+      if (me.role === 'student') refreshMine();
+      if (me.role === 'teacher' || me.role === 'admin') refreshDay();
+    }
+
+    async function refreshMine() {
+      const list = await request('/attendance/mine');
+      document.getElementById('myAttendance').innerHTML = list.map(r => `<tr><td>${r.date}</td><td>${badge(r.status)}</td><td>${r.note||''}</td></tr>`).join('');
+    }
+
+    async function refreshDay() {
+      const day = document.getElementById('dayPick').value || new Date().toISOString().slice(0,10);
+      const list = await request('/attendance/day?day=' + day);
+      document.getElementById('dayAttendance').innerHTML = list.map(r => `<tr>
+        <td>${r.id}</td>
+        <td>${r.student_id}</td>
+        <td>${r.date}</td>
+        <td>${badge(r.status)}</td>
+        <td>
+          <select data-id="${r.id}" class="updStatus">
+            <option ${r.status==='present'?'selected':''}>present</option>
+            <option ${r.status==='excused'?'selected':''}>excused</option>
+            <option ${r.status==='sick'?'selected':''}>sick</option>
+            <option ${r.status==='absent'?'selected':''}>absent</option>
+          </select>
+          <button data-id="${r.id}" class="doUpdate">Update</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    document.addEventListener('click', async (e) => {
+      if (e.target.id === 'loginBtn') {
+        login();
+      } else if (e.target.id === 'logoutBtn') {
+        token = null; me = null; location.reload();
+      } else if (e.target.id === 'startCam') {
+        const video = document.getElementById('video');
+        try { const s = await navigator.mediaDevices.getUserMedia({ video: true }); video.srcObject = s; } catch (err) { alert('Tidak bisa akses kamera'); }
+      } else if (e.target.id === 'checkIn') {
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/png');
+        try {
+          await request('/attendance/checkin', { method: 'POST', body: JSON.stringify({ image_base64: dataUrl }) });
+          alert('Check-in berhasil');
+          refreshMine();
+        } catch (e) { alert('Gagal: ' + e.message); }
+      } else if (e.target.id === 'refreshDay') {
+        refreshDay();
+      } else if (e.target.id === 'addClass') {
+        const name = document.getElementById('className').value;
+        try { await request('/admin/classes', { method: 'POST', body: JSON.stringify({ name }) }); alert('Kelas ditambah'); } catch (e) { alert('Gagal'); }
+      } else if (e.target.id === 'loadClasses') {
+        const list = await request('/admin/classes'); document.getElementById('adminList').textContent = JSON.stringify(list, null, 2);
+      } else if (e.target.id === 'addStudent') {
+        const payload = {
+          student_code: document.getElementById('stuCode').value,
+          name: document.getElementById('stuName').value,
+          username: document.getElementById('stuUsername').value,
+          password: document.getElementById('stuPassword').value,
+          class_id: document.getElementById('stuClassId').value ? Number(document.getElementById('stuClassId').value) : null
+        };
+        try { await request('/admin/students', { method: 'POST', body: JSON.stringify(payload) }); alert('Siswa ditambah'); } catch (e) { alert('Gagal: ' + e.message); }
+      } else if (e.target.id === 'loadStudents') {
+        const list = await request('/admin/students'); document.getElementById('adminList').textContent = JSON.stringify(list, null, 2);
+      } else if (e.target.id === 'addTeacher') {
+        const payload = {
+          teacher_code: document.getElementById('tchCode').value,
+          name: document.getElementById('tchName').value,
+          username: document.getElementById('tchUsername').value,
+          password: document.getElementById('tchPassword').value
+        };
+        try { await request('/admin/teachers', { method: 'POST', body: JSON.stringify(payload) }); alert('Guru ditambah'); } catch (e) { alert('Gagal: ' + e.message); }
+      } else if (e.target.id === 'loadTeachers') {
+        const list = await request('/admin/teachers'); document.getElementById('adminList').textContent = JSON.stringify(list, null, 2);
+      } else if (e.target.classList.contains('doUpdate')) {
+        const id = Number(e.target.dataset.id);
+        const sel = document.querySelector(`select.updStatus[data-id="${id}"]`);
+        try { await request(`/attendance/${id}`, { method: 'PATCH', body: JSON.stringify({ status: sel.value }) }); refreshDay(); } catch (e) { alert('Gagal update'); }
+      }
+    });
+
+    document.getElementById('dayPick').value = new Date().toISOString().slice(0,10);
+  </script>
+</body>
+</html>
